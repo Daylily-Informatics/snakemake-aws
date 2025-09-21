@@ -1560,6 +1560,12 @@ def get_argument_parser(profiles=None):
         action="store_true",
         help="Write extended benchmarking metrics.",
     )
+    group_behavior.add_argument(
+        "--include-aws-benchmark-metrics",
+        default=False,
+        action="store_true",
+        help="Augment benchmark files with AWS-specific metrics when running on AWS EC2.",
+    )
 
     group_cluster = parser.add_argument_group("REMOTE EXECUTION")
 
@@ -1918,6 +1924,7 @@ def create_output_settings(args, log_handler_settings) -> OutputSettings:
         keep_logger=False,
         stdout=args.dryrun,
         benchmark_extended=args.benchmark_extended,
+        include_aws_benchmark_metrics=args.include_aws_benchmark_metrics,
     )
 
     # Set logging behavior based on execution mode

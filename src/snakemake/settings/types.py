@@ -406,6 +406,7 @@ class OutputSettings(SettingsBase, OutputSettingsLoggerInterface):
     keep_logger: bool = False
     stdout: bool = False
     benchmark_extended: bool = False
+    include_aws_benchmark_metrics: bool = False
     log_level_override: Optional[int] = (
         None  # Override log level (e.g., ERROR for subprocess)
     )
