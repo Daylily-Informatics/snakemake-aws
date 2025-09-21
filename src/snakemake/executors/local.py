@@ -478,6 +478,11 @@ def run_wrapper(
                 bench_record.resources = resources
                 bench_record.input = input
                 bench_record.threads = threads
-            write_benchmark_records(bench_records, benchmark, benchmark_extended)
+            write_benchmark_records(
+                bench_records,
+                benchmark,
+                benchmark_extended,
+                self.workflow.output_settings.include_aws_benchmark_metrics,
+            )
         except Exception as ex:
             raise WorkflowError(ex)
