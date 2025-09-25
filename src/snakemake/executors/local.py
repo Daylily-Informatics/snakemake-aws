@@ -170,6 +170,7 @@ class Executor(RealExecutor):
             job.rule.basedir,
             self.workflow.sourcecache.cache_path,
             self.workflow.sourcecache.runtime_cache_path,
+            self.workflow.output_settings.include_aws_benchmark_metrics,
         )
 
     def run_single_job(self, job: SingleJobExecutorInterface):
@@ -307,6 +308,7 @@ def run_wrapper(
     basedir,
     sourcecache_path,
     runtime_sourcecache_path,
+    include_aws_benchmark_metrics,
 ):
     """
     Wrapper around the run method that handles exceptions and benchmarking.
@@ -482,7 +484,7 @@ def run_wrapper(
                 bench_records,
                 benchmark,
                 benchmark_extended,
-                self.workflow.output_settings.include_aws_benchmark_metrics,
+                include_aws_benchmark_metrics,
             )
         except Exception as ex:
             raise WorkflowError(ex)
