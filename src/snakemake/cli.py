@@ -4,6 +4,7 @@ __email__ = "johannes.koester@uni-due.de"
 __license__ = "MIT"
 
 from collections import defaultdict
+from functools import lru_cache
 import os
 import re
 import sys
@@ -429,7 +430,7 @@ def get_argument_parser(profiles=None):
 
     group_exec = parser.add_argument_group("EXECUTION")
 
-    group_exec.add_argument(
+    targets_argument = group_exec.add_argument(
         "targets",
         nargs="*",
         default=set(),
@@ -701,6 +702,8 @@ def get_argument_parser(profiles=None):
             "the snakefile will use this as their origin)."
         ),
     )
+
+    _register_cli_completions(parser, targets_argument)
     group_exec.add_argument(
         "--touch",
         "-t",
@@ -1796,6 +1799,122 @@ def get_argument_parser(profiles=None):
     LoggerPluginRegistry().register_cli_args(parser)
     SchedulerPluginRegistry().register_cli_args(parser)
     return parser
+
+
+def _register_cli_completions(parser, targets_argument):
+    try:
+        import argcomplete
+        from argcomplete.completers import FilesCompleter
+    except ImportError:  # pragma: no cover - optional dependency
+        return
+
+    class TargetCompleter:
+        def __init__(self):
+            self._files_completer = FilesCompleter()
+
+        def __call__(self, prefix, parsed_args, **kwargs):
+            completions = set()
+
+            file_matches = self._files_completer(prefix, **kwargs)
+            if file_matches:
+                completions.update(file_matches)
+
+            rule_matches = _complete_rule_targets(prefix, parsed_args)
+            completions.update(rule_matches)
+
+            return sorted(completions)
+
+    targets_argument.completer = TargetCompleter()
+
+    snakefile_action = next((a for a in parser._actions if a.dest == "snakefile"), None)
+    if snakefile_action is not None:
+        snakefile_action.completer = FilesCompleter(directories=True)
+
+    directory_action = next((a for a in parser._actions if a.dest == "directory"), None)
+    if directory_action is not None:
+        directory_action.completer = FilesCompleter(directories=True)
+
+    argcomplete.autocomplete(parser)
+
+
+def _complete_rule_targets(prefix, parsed_args):
+    snakefile_path = _get_snakefile_for_completion(parsed_args)
+    if snakefile_path is None:
+        return []
+
+    workdir = _get_workdir_for_completion(parsed_args)
+    rule_names = _load_rule_targets(
+        str(snakefile_path), str(workdir) if workdir is not None else None
+    )
+
+    if not prefix:
+        return list(rule_names)
+
+    return [name for name in rule_names if name.startswith(prefix)]
+
+
+def _get_snakefile_for_completion(parsed_args):
+    value = getattr(parsed_args, "snakefile", None)
+
+    snakefile = Path(value) if value else None
+
+    try:
+        snakefile = resolve_snakefile(snakefile, allow_missing=True)
+    except Exception:
+        return None
+
+    if snakefile is None:
+        return None
+
+    return Path(snakefile).absolute()
+
+
+def _get_workdir_for_completion(parsed_args):
+    value = getattr(parsed_args, "directory", None)
+    if not value:
+        return None
+
+    try:
+        return Path(value).absolute()
+    except Exception:
+        return None
+
+
+@lru_cache(maxsize=32)
+def _load_rule_targets(snakefile_path, workdir_path):
+    from snakemake.settings.enums import Quietness
+
+    snakefile = Path(snakefile_path)
+    workdir = Path(workdir_path) if workdir_path is not None else None
+
+    output_settings = OutputSettings(
+        quiet=frozenset({Quietness.ALL}),
+        enable_file_logging=False,
+        keep_logger=False,
+    )
+
+    try:
+        with SnakemakeApi(output_settings) as snakemake_api:
+            workflow_api = snakemake_api.workflow(
+                resource_settings=ResourceSettings(),
+                config_settings=ConfigSettings(),
+                storage_settings=StorageSettings(),
+                workflow_settings=WorkflowSettings(),
+                deployment_settings=DeploymentSettings(),
+                snakefile=snakefile,
+                workdir=workdir,
+            )
+
+            workflow = workflow_api._workflow
+            return tuple(
+                sorted(
+                    rule.name
+                    for rule in workflow.rules
+                    if not rule.has_wildcards()
+                )
+            )
+    except Exception:
+        return tuple()
 
 
 def generate_parser_metadata(parser, args):
